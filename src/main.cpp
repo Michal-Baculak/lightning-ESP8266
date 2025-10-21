@@ -27,7 +27,7 @@ void handleRoot()
     <button onclick="fetch('/on')">LED ON</button>
     <button onclick="fetch('/off')">LED OFF</button>
     <p>Brightness: <input type="range" min="0" max="4095" oninput="fetch('/brightness?val='+this.value)"></p>
-    <p>Color: <input type="color" oninput="fetch('/color?val='+this.value)"></p>
+    <p>Color: <input type="color" oninput="fetch('/color?val=' + encodeURIComponent(this.value))"></p>
   </body>
   </html>
   )rawliteral";
