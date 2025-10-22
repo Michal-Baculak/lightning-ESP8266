@@ -84,18 +84,33 @@ uint8_t LED_PWM_write(uint8_t LED_id, uint16_t brightness)
   spiSendBytes(data, 3);
   return 0x00;
 }
-uint8_t LED_RGB_write(uint8_t LED_id, uint16_t red, uint16_t green, uint16_t blue)
+uint8_t LED_RGB_write(uint8_t LED_id, uint8_t red, uint8_t green, uint8_t blue)
 {
-  // MSG = 0b0100aaaa 0brrrrrrrr 0brrrrgggg 0bgggggggg 0b_bbbbbbbb 0b_bbbb0000
-  if(LED_id > 15) return 0x01;
-  uint8_t data[6];
+  // MSG = 0b0100aaaa 0brrrrrrrr 0bgggggggg 0bbbbbbbbb
+  Serial.print("LED_RGB_write called with ID: ");
+  Serial.println(LED_id);
+  Serial.print("Red: ");
+  Serial.println(red);
+  Serial.print("Green: ");
+  Serial.println(green);
+  Serial.print("Blue: ");
+  Serial.println(blue);
+  if(LED_id > 5) return 0x01;
+  uint8_t data[4];
   data[0] = 0b01000000 | (LED_id);
-  data[1] = (red >> 4) & 0xFF;   // Extract high 8 bits
-  data[2] = 0b00000000 | ((red << 4) & 0xF0) | ((green >> 8) & 0x0F); // Combine low 4 bits of red and high 4 bits of green
-  data[3] = green & 0xFF; // Low 8 bits of green
-  data[4] = (blue >> 4) & 0xFF;  // Extract high 8 bits of blue
-  data[5] = (blue << 4) & 0xF0; // Low 4 bits of blue, last 4 bits are padding
-  spiSendBytes(data, 6);
+  data[1] = red;
+  data[2] = green;
+  data[3] = blue;
+  spiSendBytes(data, 4);
+  Serial.println("SPI command for RGB LED sent.");
+  Serial.print("SPI data 0: ");
+  Serial.println(data[0], BIN);
+  Serial.print("SPI data 1: ");
+  Serial.println(data[1], BIN);
+  Serial.print("SPI data 2: ");
+  Serial.println(data[2], BIN);
+  Serial.print("SPI data 3: ");
+  Serial.println(data[3], BIN);
   return 0x00;
 }
 uint8_t LED_config(uint8_t RGB_LED_count, uint8_t greyscale_LED_count)
@@ -158,9 +173,6 @@ void setup()
         uint16_t red = (color >> 16) & 0xFF;
         uint16_t green = (color >> 8) & 0xFF;
         uint16_t blue = color & 0xFF;
-        red = map(red, 0, 255, 0, 4095);
-        green = map(green, 0, 255, 0, 4095);
-        blue = map(blue, 0, 255, 0, 4095);
         Serial.print("Setting color to R:");
         Serial.print(red);
         Serial.print(" G:");
@@ -168,8 +180,11 @@ void setup()
         Serial.print(" B:");
         Serial.println(blue);
 
-        //LED_RGB_write(0, red, green, blue);
+        uint8_t status = LED_RGB_write(0, red, green, blue);
         
+        Serial.println("SPI command sent with status: ");
+        Serial.println(status);
+
         server.send(200, "text/plain", "Color set to " + colorStr);
       } else {
         server.send(400, "text/plain", "Bad Request: 'val' parameter invalid");
