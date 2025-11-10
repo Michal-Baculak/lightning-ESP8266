@@ -10,28 +10,119 @@ boolean isLEDOn;
 static const int spiCLKFreq = 1e6; //1MHz clock
 SPISettings spiSettings(spiCLKFreq, MSBFIRST, SPI_MODE0);
 
+
+int rgbCount = 0;
+int grayCount = 0;
+
 void handleRoot()
 {
   String page = R"rawliteral(
   <!DOCTYPE html>
   <html>
   <head>
-    <title>ESP8266 Web server</title>
+    <title>ESP8266 LED Control</title>
     <style>
-      body { font-family: Arial; text-align: center; }
+      body { font-family: Arial; text-align: center; margin: 20px; }
       button { padding: 10px 20px; margin: 5px; }
+      .led-panel { border: 1px solid #ccc; border-radius: 10px; padding: 10px; margin: 10px; display: inline-block; }
+      .settings { margin-top: 20px; }
     </style>
   </head>
   <body>
     <h1>ESP8266 LED Control</h1>
-    <button onclick="fetch('/on')">LED ON</button>
-    <button onclick="fetch('/off')">LED OFF</button>
-    <p>Brightness: <input type="range" min="0" max="4095" oninput="fetch('/brightness?val='+this.value)"></p>
-    <p>Color: <input type="color" oninput="fetch('/color?val=' + encodeURIComponent(this.value))"></p>
+    <button onclick="showSettings()">Settings</button>
+    <div id="settings" class="settings" style="display:none;">
+      <h3>Configuration</h3>
+      <p>
+        RGB LEDs: 
+        <select id="rgbCount">
+          <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
+        </select>
+      </p>
+      <p>
+        Greyscale LEDs: 
+        <select id="grayCount">
+          <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
+        </select>
+      </p>
+      <button onclick="saveConfig()">Save</button>
+    </div>
+
+    <div id="ledPanels"></div>
+
+    <script>
+      async function showSettings() {
+        const res = await fetch('/getConfig');
+        const text = await res.text(); // example: "rgb=2&gray=3"
+        const params = new URLSearchParams(text);
+        document.getElementById('rgbCount').value = params.get('rgb');
+        document.getElementById('grayCount').value = params.get('gray');
+        document.getElementById('settings').style.display = 'block';
+      }
+
+      async function saveConfig() {
+        const rgb = document.getElementById('rgbCount').value;
+        const gray = document.getElementById('grayCount').value;
+        await fetch(`/saveConfig?rgb=${rgb}&gray=${gray}`);
+        buildPanels(rgb, gray);
+        document.getElementById('settings').style.display = 'none';
+      }
+
+      async function buildPanels(rgbCount, grayCount) {
+        // If not provided, fetch from ESP
+        if (!rgbCount || !grayCount) {
+          const res = await fetch('/getConfig');
+          const text = await res.text();
+          const params = new URLSearchParams(text);
+          rgbCount = params.get('rgb');
+          grayCount = params.get('gray');
+        }
+
+        let html = '';
+        const rgb = parseInt(rgbCount);
+        const gray = parseInt(grayCount);
+
+        for (let i = 1; i <= rgb; i++) {
+          html += `
+            <div class="led-panel">
+              <h3>RGB LED ${i}</h3>
+              <button onclick="fetch('/rgb${i}/on')">ON</button>
+              <button onclick="fetch('/rgb${i}/off')">OFF</button>
+              <p>Color: <input type="color" oninput="fetch('/rgb${i}/color?val='+encodeURIComponent(this.value))"></p>
+            </div>`;
+        }
+
+        for (let i = 1; i <= gray; i++) {
+          html += `
+            <div class="led-panel">
+              <h3>Greyscale LED ${i}</h3>
+              <button onclick="fetch('/gray${i}/on')">ON</button>
+              <button onclick="fetch('/gray${i}/off')">OFF</button>
+              <p>Brightness: <input type="range" min="0" max="4095" oninput="fetch('/gray${i}/brightness?val='+this.value)"></p>
+            </div>`;
+        }
+
+        document.getElementById('ledPanels').innerHTML = html;
+      }
+
+      window.onload = buildPanels;
+    </script>
   </body>
   </html>
   )rawliteral";
   server.send(200, "text/html", page);
+}
+
+void handleGetConfig() {
+  String response = "rgb=" + String(rgbCount) + "&gray=" + String(grayCount);
+  server.send(200, "text/plain", response);
+}
+
+void handleSaveConfig() {
+  if (server.hasArg("rgb")) rgbCount = server.arg("rgb").toInt();
+  if (server.hasArg("gray")) grayCount = server.arg("gray").toInt();
+  Serial.printf("New config: RGB=%d, Gray=%d\n", rgbCount, grayCount);
+  server.send(200, "text/plain", "OK");
 }
 
 void spiSendBytes(const uint8_t* data, size_t length)
@@ -139,60 +230,69 @@ void turnLEDOff()
   // spiSend(0b11110000);
 }
 
+void handleEndpoint()
+{
+  Serial.print("Received request: ");
+  Serial.println(server.uri());
+}
+
 void setup()
 {
   Serial.begin(115200);
   isLEDOn = false;
   WiFi.softAP("ESP8266 LED Dimmer", "YOLOisTOOshort");
+  server.onNotFound(handleEndpoint);
   server.on("/", handleRoot);
-  server.on("/on", turnLEDOn);
-  server.on("/off", turnLEDOff);
-  server.on("/brightness", []() {
-    if (server.hasArg("val")) {
-      int brightness = server.arg("val").toInt();
-      brightness = constrain(brightness, 0, 4095);
-      Serial.print("Setting brightness to: ");
-      Serial.println(brightness);
+  server.on("/getConfig", handleGetConfig);
+  server.on("/saveConfig", handleSaveConfig);
+  // server.on("/on", turnLEDOn);
+  // server.on("/off", turnLEDOff);
+  // server.on("/brightness", []() {
+  //   if (server.hasArg("val")) {
+  //     int brightness = server.arg("val").toInt();
+  //     brightness = constrain(brightness, 0, 4095);
+  //     Serial.print("Setting brightness to: ");
+  //     Serial.println(brightness);
 
-      LED_PWM_write(0, brightness);
+  //     LED_PWM_write(0, brightness);
       
-      server.send(200, "text/plain", "Brightness set to " + String(brightness));
-    } else {
-      server.send(400, "text/plain", "Bad Request: 'val' parameter missing");
-    }
-  });
-  server.on("/color", HTTP_GET, []() {
-    if (server.hasArg("val")) {
-      String colorStr = server.arg("val");
-      Serial.print("Received color value: ");
-      Serial.println(colorStr);
-      Serial.print("Raw server.arg: ");
-      Serial.println(server.arg("val"));
-      if(colorStr.length() == 7 && colorStr.charAt(0) == '#') {
-        long color = strtol(colorStr.substring(1).c_str(), NULL, 16);
-        uint16_t red = (color >> 16) & 0xFF;
-        uint16_t green = (color >> 8) & 0xFF;
-        uint16_t blue = color & 0xFF;
-        Serial.print("Setting color to R:");
-        Serial.print(red);
-        Serial.print(" G:");
-        Serial.print(green);
-        Serial.print(" B:");
-        Serial.println(blue);
+  //     server.send(200, "text/plain", "Brightness set to " + String(brightness));
+  //   } else {
+  //     server.send(400, "text/plain", "Bad Request: 'val' parameter missing");
+  //   }
+  // });
+  // server.on("/color", HTTP_GET, []() {
+  //   if (server.hasArg("val")) {
+  //     String colorStr = server.arg("val");
+  //     Serial.print("Received color value: ");
+  //     Serial.println(colorStr);
+  //     Serial.print("Raw server.arg: ");
+  //     Serial.println(server.arg("val"));
+  //     if(colorStr.length() == 7 && colorStr.charAt(0) == '#') {
+  //       long color = strtol(colorStr.substring(1).c_str(), NULL, 16);
+  //       uint16_t red = (color >> 16) & 0xFF;
+  //       uint16_t green = (color >> 8) & 0xFF;
+  //       uint16_t blue = color & 0xFF;
+  //       Serial.print("Setting color to R:");
+  //       Serial.print(red);
+  //       Serial.print(" G:");
+  //       Serial.print(green);
+  //       Serial.print(" B:");
+  //       Serial.println(blue);
 
-        uint8_t status = LED_RGB_write(0, red, green, blue);
+  //       uint8_t status = LED_RGB_write(0, red, green, blue);
         
-        Serial.println("SPI command sent with status: ");
-        Serial.println(status);
+  //       Serial.println("SPI command sent with status: ");
+  //       Serial.println(status);
 
-        server.send(200, "text/plain", "Color set to " + colorStr);
-      } else {
-        server.send(400, "text/plain", "Bad Request: 'val' parameter invalid");
-      }
-    } else {
-      server.send(400, "text/plain", "Bad Request: 'val' parameter missing");
-    }
-  });
+  //       server.send(200, "text/plain", "Color set to " + colorStr);
+  //     } else {
+  //       server.send(400, "text/plain", "Bad Request: 'val' parameter invalid");
+  //     }
+  //   } else {
+  //     server.send(400, "text/plain", "Bad Request: 'val' parameter missing");
+  //   }
+  // });
   server.begin();
   Serial.println("Server is up and running");
   pinMode(LED_PIN, OUTPUT);
