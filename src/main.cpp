@@ -14,6 +14,113 @@ SPISettings spiSettings(spiCLKFreq, MSBFIRST, SPI_MODE0);
 int rgbCount = 0;
 int grayCount = 0;
 
+void spiSendBytes(const uint8_t* data, size_t length)
+{
+  SPI.beginTransaction(spiSettings);
+
+  digitalWrite(SS, LOW);
+
+  SPI.transferBytes(data, nullptr, length);
+
+  digitalWrite(SS, HIGH);
+  
+  SPI.endTransaction();
+}
+void spiSend(uint8_t byte)
+{
+  SPI.beginTransaction(spiSettings);
+
+  digitalWrite(SS, LOW);
+
+  uint8_t status = SPI.transfer(byte);
+  digitalWrite(SS, HIGH);
+  
+  SPI.endTransaction();
+
+  Serial.print("SPI sent data resulting in status: ");
+  Serial.println(status);
+}
+uint8_t LED_digital_write(uint8_t LED_id, uint8_t state)
+{
+  // MSG = 0b000A AAAV
+  // AAAA = LED ID (0-15)
+  // V = Value (0=OFF, 1=ON)
+  if(LED_id > 15) return 0x01;
+  uint8_t data = 0b00000000;
+  data = data | LED_id;
+  data = data | ((state & 0x01) << 4);
+  spiSend(data);
+  return 0x00;
+}
+uint8_t LED_PWM_write(uint8_t LED_id, uint16_t brightness)
+{
+  // MSG = 0b0010AAAA BBBBBBBB BBBB0000 
+  if(LED_id > 15) return 0x01;
+  if(brightness > 4095) brightness = 4095;
+  uint8_t data[3];
+  data[0] = 0b00100000 | (LED_id);
+  data[1] = (brightness >> 4) & 0xFF; // High byte
+  data[2] = (brightness << 4) & 0xFF; // Low byte
+  spiSendBytes(data, 3);
+  return 0x00;
+}
+uint8_t LED_RGB_write(uint8_t LED_id, uint8_t red, uint8_t green, uint8_t blue)
+{
+  // MSG = 0b0100aaaa 0brrrrrrrr 0bgggggggg 0bbbbbbbbb
+  Serial.print("LED_RGB_write called with ID: ");
+  Serial.println(LED_id);
+  Serial.print("Red: ");
+  Serial.println(red);
+  Serial.print("Green: ");
+  Serial.println(green);
+  Serial.print("Blue: ");
+  Serial.println(blue);
+  if(LED_id > 5) return 0x01;
+  uint8_t data[4];
+  data[0] = 0b01000000 | (LED_id);
+  data[1] = red;
+  data[2] = green;
+  data[3] = blue;
+  spiSendBytes(data, 4);
+  Serial.println("SPI command for RGB LED sent.");
+  Serial.print("SPI data 0: ");
+  Serial.println(data[0], BIN);
+  Serial.print("SPI data 1: ");
+  Serial.println(data[1], BIN);
+  Serial.print("SPI data 2: ");
+  Serial.println(data[2], BIN);
+  Serial.print("SPI data 3: ");
+  Serial.println(data[3], BIN);
+  return 0x00;
+}
+uint8_t LED_config(uint8_t RGB_LED_count, uint8_t greyscale_LED_count)
+{
+  // MSG = 0b_01100000  0b_mmmnnnnn
+  if(RGB_LED_count > 5) return 0x01;
+  if(greyscale_LED_count > 15) return 0x02;
+  uint8_t data[2];
+  data[0] = 0b01100000;
+  data[1] = (0b11100000 & (RGB_LED_count << 5)) | (0b00011111 & greyscale_LED_count);
+  spiSendBytes(data, 2);
+  return 0x00;
+}
+
+void turnLEDOn()
+{
+  Serial.println("LED was turned ON");
+  isLEDOn = true;
+  LED_digital_write(0, 1);
+  // spiSend(0b0001111);
+}
+
+void turnLEDOff()
+{
+  Serial.println("LED was turned OFF");
+  isLEDOn = false;
+  LED_digital_write(0, 0);
+  // spiSend(0b11110000);
+}
+
 void handleRoot()
 {
   String page = R"rawliteral(
@@ -122,118 +229,44 @@ void handleSaveConfig() {
   if (server.hasArg("rgb")) rgbCount = server.arg("rgb").toInt();
   if (server.hasArg("gray")) grayCount = server.arg("gray").toInt();
   Serial.printf("New config: RGB=%d, Gray=%d\n", rgbCount, grayCount);
+  
+  //send command over SPI
+  LED_config(rgbCount, grayCount);
+
   server.send(200, "text/plain", "OK");
 }
 
-void spiSendBytes(const uint8_t* data, size_t length)
-{
-  SPI.beginTransaction(spiSettings);
 
-  digitalWrite(SS, LOW);
-
-  SPI.transferBytes(data, nullptr, length);
-
-  digitalWrite(SS, HIGH);
-  
-  SPI.endTransaction();
-}
-void spiSend(uint8_t byte)
-{
-  SPI.beginTransaction(spiSettings);
-
-  digitalWrite(SS, LOW);
-
-  uint8_t status = SPI.transfer(byte);
-  digitalWrite(SS, HIGH);
-  
-  SPI.endTransaction();
-
-  Serial.print("SPI sent data resulting in status: ");
-  Serial.println(status);
-}
-uint8_t LED_digital_write(uint8_t LED_id, uint8_t state)
-{
-  // MSG = 0b000A AAAV
-  // AAAA = LED ID (0-15)
-  // V = Value (0=OFF, 1=ON)
-  if(LED_id > 15) return 0x01;
-  uint8_t data = 0b00000000;
-  data = data | LED_id;
-  data = data | ((state & 0x01) << 4);
-  spiSend(data);
-  return 0x00;
-}
-uint8_t LED_PWM_write(uint8_t LED_id, uint16_t brightness)
-{
-  // MSG = 0b0010AAAA BBBBBBBB BBBB0000 
-  if(LED_id > 15) return 0x01;
-  if(brightness > 4095) brightness = 4095;
-  uint8_t data[3];
-  data[0] = 0b00100000 | (LED_id);
-  data[1] = (brightness >> 4) & 0xFF; // High byte
-  data[2] = (brightness << 4) & 0xFF; // Low byte
-  spiSendBytes(data, 3);
-  return 0x00;
-}
-uint8_t LED_RGB_write(uint8_t LED_id, uint8_t red, uint8_t green, uint8_t blue)
-{
-  // MSG = 0b0100aaaa 0brrrrrrrr 0bgggggggg 0bbbbbbbbb
-  Serial.print("LED_RGB_write called with ID: ");
-  Serial.println(LED_id);
-  Serial.print("Red: ");
-  Serial.println(red);
-  Serial.print("Green: ");
-  Serial.println(green);
-  Serial.print("Blue: ");
-  Serial.println(blue);
-  if(LED_id > 5) return 0x01;
-  uint8_t data[4];
-  data[0] = 0b01000000 | (LED_id);
-  data[1] = red;
-  data[2] = green;
-  data[3] = blue;
-  spiSendBytes(data, 4);
-  Serial.println("SPI command for RGB LED sent.");
-  Serial.print("SPI data 0: ");
-  Serial.println(data[0], BIN);
-  Serial.print("SPI data 1: ");
-  Serial.println(data[1], BIN);
-  Serial.print("SPI data 2: ");
-  Serial.println(data[2], BIN);
-  Serial.print("SPI data 3: ");
-  Serial.println(data[3], BIN);
-  return 0x00;
-}
-uint8_t LED_config(uint8_t RGB_LED_count, uint8_t greyscale_LED_count)
-{
-  // MSG = 0b_01100000  0b_mmmnnnnn
-  if(RGB_LED_count > 5) return 0x01;
-  if(greyscale_LED_count > 15) return 0x02;
-  uint8_t data[2];
-  data[0] = 0b01100000;
-  data[1] = (0b11100000 & (RGB_LED_count << 5)) | (0b00011111 & greyscale_LED_count);
-  spiSendBytes(data, 2);
-  return 0x00;
-}
-void turnLEDOn()
-{
-  Serial.println("LED was turned ON");
-  isLEDOn = true;
-  LED_digital_write(0, 1);
-  // spiSend(0b0001111);
-}
-void turnLEDOff()
-{
-  Serial.println("LED was turned OFF");
-  isLEDOn = false;
-  LED_digital_write(0, 0);
-  // spiSend(0b11110000);
-}
 
 void handleEndpoint()
 {
   Serial.print("Received request: ");
-  Serial.println(server.uri());
+  String uri = server.uri();
+  String val = server.arg("val");
+  Serial.println(uri);
+
+  if (uri.startsWith("/rgb")) 
+  {
+    int numStart = 4;
+    int numEnd = uri.indexOf('/', numStart);
+    int ledNum = uri.substring(numStart, numEnd).toInt();
+    String action = uri.substring(numEnd + 1);
+
+    if (action == "on") Serial.printf("RGB %d ON\n", ledNum);
+    else if (action == "off") Serial.printf("RGB %d OFF\n", ledNum);
+    else if (action == "color") Serial.printf("RGB %d COLOR %s\n", ledNum, val.c_str());
+  }
+  else if (uri.startsWith("/gray")) {
+    int numStart = 5;
+    int numEnd = uri.indexOf('/', numStart);
+    int ledNum = uri.substring(numStart, numEnd).toInt();
+    String action = uri.substring(numEnd + 1);
+
+    if (action == "on") Serial.printf("GRAY %d ON\n", ledNum);
+    else if (action == "off") Serial.printf("GRAY %d OFF\n", ledNum);
+    else if (action == "brightness") Serial.printf("GRAY %d BRIGHTNESS %s\n", ledNum, val.c_str());
+  }
+  server.send(200, "text/plain", "OK");
 }
 
 void setup()
