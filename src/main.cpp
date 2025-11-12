@@ -250,21 +250,65 @@ void handleEndpoint()
     int numStart = 4;
     int numEnd = uri.indexOf('/', numStart);
     int ledNum = uri.substring(numStart, numEnd).toInt();
+    int ledID = ledNum-1;
     String action = uri.substring(numEnd + 1);
 
-    if (action == "on") Serial.printf("RGB %d ON\n", ledNum);
-    else if (action == "off") Serial.printf("RGB %d OFF\n", ledNum);
-    else if (action == "color") Serial.printf("RGB %d COLOR %s\n", ledNum, val.c_str());
+    if (action == "on")
+    {
+      Serial.printf("RGB %d ON\n", ledNum);
+      LED_digital_write(ledID,1);
+    } 
+    else if (action == "off") 
+    {
+      Serial.printf("RGB %d OFF\n", ledNum);
+      LED_digital_write(ledID,0);
+    }
+    else if (action == "color")
+    {
+      Serial.printf("RGB %d COLOR %s\n", ledID, val.c_str());
+
+      // check color format
+      if(val.length() != 7 || val.charAt(0) != '#') 
+      {
+        Serial.println("Color argument is ill formatted!");
+        server.send(200, "text/plain", "INCORRECT COLOR FORMAT");
+        return;
+      }
+
+      // parse color
+      long color = strtol(val.substring(1).c_str(), NULL, 16);
+      uint16_t red = (color >> 16) & 0xFF;
+      uint16_t green = (color >> 8) & 0xFF;
+      uint16_t blue = color & 0xFF;
+
+      // send command over SPI
+      LED_RGB_write(ledID, red, green, blue);
+    }
   }
   else if (uri.startsWith("/gray")) {
     int numStart = 5;
     int numEnd = uri.indexOf('/', numStart);
     int ledNum = uri.substring(numStart, numEnd).toInt();
+    int ledID = ledNum - 1 + rgbCount;
     String action = uri.substring(numEnd + 1);
 
-    if (action == "on") Serial.printf("GRAY %d ON\n", ledNum);
-    else if (action == "off") Serial.printf("GRAY %d OFF\n", ledNum);
-    else if (action == "brightness") Serial.printf("GRAY %d BRIGHTNESS %s\n", ledNum, val.c_str());
+    if (action == "on")
+    {
+      Serial.printf("GRAY %d ON\n", ledNum);
+      LED_digital_write(ledID, 1);
+    } 
+    else if (action == "off")
+    {
+      Serial.printf("GRAY %d OFF\n", ledNum);
+      LED_digital_write(ledID, 0);
+    }
+    else if (action == "brightness")
+    {
+      Serial.printf("GRAY %d BRIGHTNESS %s\n", ledNum, val.c_str());
+      int brightness = strtol(val.c_str(), NULL, 10);
+      Serial.printf("Setting led ID: %d, to brightness %d", ledID, brightness);
+      LED_PWM_write(ledID, brightness);
+    } 
   }
   server.send(200, "text/plain", "OK");
 }
