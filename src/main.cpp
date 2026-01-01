@@ -14,31 +14,64 @@ SPISettings spiSettings(spiCLKFreq, MSBFIRST, SPI_MODE0);
 int rgbCount = 0;
 int grayCount = 0;
 
-void spiSendBytes(const uint8_t* data, size_t length)
-{
-  SPI.beginTransaction(spiSettings);
-
-  digitalWrite(SS, LOW);
-
-  SPI.transferBytes(data, nullptr, length);
-
-  digitalWrite(SS, HIGH);
-  
-  SPI.endTransaction();
-}
 void spiSend(uint8_t byte)
 {
   SPI.beginTransaction(spiSettings);
 
   digitalWrite(SS, LOW);
 
+  delayMicroseconds(5);
+
   uint8_t status = SPI.transfer(byte);
-  digitalWrite(SS, HIGH);
   
+  delayMicroseconds(5);
+
+  digitalWrite(SS, HIGH);
+
   SPI.endTransaction();
 
   Serial.print("SPI sent data resulting in status: ");
   Serial.println(status);
+}
+
+void spiSendBytes(const uint8_t* data, size_t length)
+{
+
+  for (size_t i = 0; i < length; i++)
+  {
+    spiSend(data[i]);
+    delay(1);
+  }
+  
+
+  // SPI.beginTransaction(spiSettings);
+
+  // digitalWrite(SS, LOW);
+
+  // delayMicroseconds(5);
+
+  // SPI.transferBytes(data, nullptr, length);
+
+  // delayMicroseconds(5);
+
+  // digitalWrite(SS, HIGH);
+  
+  // SPI.endTransaction();
+}
+
+uint8_t spiReadByte()
+{
+  SPI.beginTransaction(spiSettings);
+
+  digitalWrite(SS, LOW);
+
+  uint8_t value = SPI.transfer(0xFF); // dummy byte (0xFF) is unused by the convention
+
+  digitalWrite(SS, HIGH);
+
+  SPI.endTransaction();
+
+  return value;
 }
 uint8_t LED_digital_write(uint8_t LED_id, uint8_t state)
 {
@@ -102,7 +135,26 @@ uint8_t LED_config(uint8_t RGB_LED_count, uint8_t greyscale_LED_count)
   data[0] = 0b01100000;
   data[1] = (0b11100000 & (RGB_LED_count << 5)) | (0b00011111 & greyscale_LED_count);
   spiSendBytes(data, 2);
-  return 0x00;
+
+  // wait for slave to perform its starting sequence - 300ms per pin, which is 300*16 = 4800ms max
+  Serial.println("Config sent to slave, waiting for execution...");
+  unsigned long slave_await_delay = 300*(RGB_LED_count * 3 + greyscale_LED_count + 1);
+  delay(slave_await_delay);
+
+  // poll slave for response 10 times with 100ms intervals
+  Serial.println("Polling slave for response...");
+  for (size_t i = 0; i < 10; i++)
+  {
+    uint8_t slave_response = spiReadByte();
+    Serial.printf("Slave responded with message: %d", slave_response);
+    // correct response is 0b1
+    if(slave_response == 0b1)
+      return 0x00;
+
+    delay(100);
+  }
+  Serial.printf("Serial polling timed out, error");
+  return 0x01; // 0x01: error - slave timeout
 }
 
 void turnLEDOn()
@@ -235,8 +287,6 @@ void handleSaveConfig() {
 
   server.send(200, "text/plain", "OK");
 }
-
-
 
 void handleEndpoint()
 {
