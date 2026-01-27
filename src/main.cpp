@@ -40,7 +40,8 @@ void spiSendBytes(const uint8_t* data, size_t length)
   for (size_t i = 0; i < length; i++)
   {
     spiSend(data[i]);
-    delay(1);
+    delayMicroseconds(50);
+    // delay(1);
   }
   
 
@@ -372,54 +373,6 @@ void setup()
   server.on("/", handleRoot);
   server.on("/getConfig", handleGetConfig);
   server.on("/saveConfig", handleSaveConfig);
-  // server.on("/on", turnLEDOn);
-  // server.on("/off", turnLEDOff);
-  // server.on("/brightness", []() {
-  //   if (server.hasArg("val")) {
-  //     int brightness = server.arg("val").toInt();
-  //     brightness = constrain(brightness, 0, 4095);
-  //     Serial.print("Setting brightness to: ");
-  //     Serial.println(brightness);
-
-  //     LED_PWM_write(0, brightness);
-      
-  //     server.send(200, "text/plain", "Brightness set to " + String(brightness));
-  //   } else {
-  //     server.send(400, "text/plain", "Bad Request: 'val' parameter missing");
-  //   }
-  // });
-  // server.on("/color", HTTP_GET, []() {
-  //   if (server.hasArg("val")) {
-  //     String colorStr = server.arg("val");
-  //     Serial.print("Received color value: ");
-  //     Serial.println(colorStr);
-  //     Serial.print("Raw server.arg: ");
-  //     Serial.println(server.arg("val"));
-  //     if(colorStr.length() == 7 && colorStr.charAt(0) == '#') {
-  //       long color = strtol(colorStr.substring(1).c_str(), NULL, 16);
-  //       uint16_t red = (color >> 16) & 0xFF;
-  //       uint16_t green = (color >> 8) & 0xFF;
-  //       uint16_t blue = color & 0xFF;
-  //       Serial.print("Setting color to R:");
-  //       Serial.print(red);
-  //       Serial.print(" G:");
-  //       Serial.print(green);
-  //       Serial.print(" B:");
-  //       Serial.println(blue);
-
-  //       uint8_t status = LED_RGB_write(0, red, green, blue);
-        
-  //       Serial.println("SPI command sent with status: ");
-  //       Serial.println(status);
-
-  //       server.send(200, "text/plain", "Color set to " + colorStr);
-  //     } else {
-  //       server.send(400, "text/plain", "Bad Request: 'val' parameter invalid");
-  //     }
-  //   } else {
-  //     server.send(400, "text/plain", "Bad Request: 'val' parameter missing");
-  //   }
-  // });
   server.begin();
   Serial.println("Server is up and running");
   pinMode(LED_PIN, OUTPUT);
