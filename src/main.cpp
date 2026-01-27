@@ -14,6 +14,8 @@ SPISettings spiSettings(spiCLKFreq, MSBFIRST, SPI_MODE0);
 int rgbCount = 0;
 int grayCount = 0;
 
+void testSequence(void);
+
 void spiSend(uint8_t byte)
 {
   SPI.beginTransaction(spiSettings);
@@ -40,7 +42,7 @@ void spiSendBytes(const uint8_t* data, size_t length)
   for (size_t i = 0; i < length; i++)
   {
     spiSend(data[i]);
-    delayMicroseconds(50);
+    delayMicroseconds(5);
     // delay(1);
   }
   
@@ -203,6 +205,8 @@ void handleRoot()
         Greyscale LEDs: 
         <select id="grayCount">
           <option>0</option><option>1</option><option>2</option><option>3</option><option>4</option>
+          <option>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+          <option>10</option><option>11</option><option>12</option><option>13</option><option>14</option>
         </select>
       </p>
       <button onclick="saveConfig()">Save</button>
@@ -388,6 +392,9 @@ void setup()
   SPI.begin();
   pinMode(SS, OUTPUT);
   digitalWrite(SS, HIGH);
+  delay(1000);
+
+  // testSequence();
 }
 
 void loop()
@@ -397,4 +404,25 @@ void loop()
     digitalWrite(LED_PIN, HIGH);
   else
     digitalWrite(LED_PIN, LOW);
+}
+
+void testSequence()
+{
+  Serial.println("Setting LED config to (2,3)");
+  LED_config(2, 3);
+  Serial.println("100ms delay...");
+  delay(100); 
+  Serial.println("Starting to gradually control LED 2");
+
+  for(uint16_t i = 0; i < 4095; ++i)
+  {
+    LED_PWM_write(2, i);
+    // delay(50);
+  }
+  for(uint16_t i = 4095; i >= 0; --i)
+  {
+    LED_PWM_write(2, i);
+    // delay(50);
+  }
+  Serial.println("Sequence finished!");
 }
