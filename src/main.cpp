@@ -260,9 +260,28 @@ void handleRoot()
           html += `
             <div class="led-panel">
               <h3>Greyscale LED ${i}</h3>
-              <button onclick="fetch('/gray${i}/on')">ON</button>
-              <button onclick="fetch('/gray${i}/off')">OFF</button>
-              <p>Brightness: <input type="range" min="0" max="4095" oninput="fetch('/gray${i}/brightness?val='+this.value)"></p>
+
+              <button onclick="
+                fetch('/gray${i}/on');
+                document.getElementById('gray-slider-${i}').value = 4095;
+              ">ON</button>
+
+              <button onclick="
+                fetch('/gray${i}/off');
+                document.getElementById('gray-slider-${i}').value = 0;
+              ">OFF</button>
+
+              <p>
+                Brightness:
+                <input
+                  type="range"
+                  id="gray-slider-${i}"
+                  min="0"
+                  max="4095"
+                  value="0"
+                  oninput="fetch('/gray${i}/brightness?val=' + this.value)"
+                >
+              </p>
             </div>`;
         }
 
