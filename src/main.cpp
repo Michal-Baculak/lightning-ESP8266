@@ -16,17 +16,13 @@ void testSequence(void);
 void spiSend(uint8_t byte)
 {
   SPI.beginTransaction(spiSettings);
-
   digitalWrite(SS, LOW);
-
   delayMicroseconds(5);
 
   uint8_t status = SPI.transfer(byte);
   
   delayMicroseconds(5);
-
   digitalWrite(SS, HIGH);
-
   SPI.endTransaction();
 
   Serial.print("SPI sent data resulting in status: ");
@@ -40,35 +36,17 @@ void spiSendBytes(const uint8_t* data, size_t length)
   {
     spiSend(data[i]);
     delayMicroseconds(5);
-    // delay(1);
   }
-  
-
-  // SPI.beginTransaction(spiSettings);
-
-  // digitalWrite(SS, LOW);
-
-  // delayMicroseconds(5);
-
-  // SPI.transferBytes(data, nullptr, length);
-
-  // delayMicroseconds(5);
-
-  // digitalWrite(SS, HIGH);
-  
-  // SPI.endTransaction();
 }
 
 uint8_t spiReadByte()
 {
   SPI.beginTransaction(spiSettings);
-
   digitalWrite(SS, LOW);
 
   uint8_t value = SPI.transfer(0xFF); // dummy byte (0xFF) is unused by the convention
 
   digitalWrite(SS, HIGH);
-
   SPI.endTransaction();
 
   return value;
