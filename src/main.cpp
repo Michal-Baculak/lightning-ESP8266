@@ -3,10 +3,7 @@
 #include <ESP8266WebServer.h>
 #include <SPI.h>
 
-#define LED_PIN 5
-
 ESP8266WebServer server(80);
-boolean isLEDOn;
 static const int spiCLKFreq = 1e6; //1MHz clock
 SPISettings spiSettings(spiCLKFreq, MSBFIRST, SPI_MODE0);
 
@@ -158,22 +155,6 @@ uint8_t LED_config(uint8_t RGB_LED_count, uint8_t greyscale_LED_count)
   }
   Serial.printf("Serial polling timed out, error");
   return 0x01; // 0x01: error - slave timeout
-}
-
-void turnLEDOn()
-{
-  Serial.println("LED was turned ON");
-  isLEDOn = true;
-  LED_digital_write(0, 1);
-  // spiSend(0b0001111);
-}
-
-void turnLEDOff()
-{
-  Serial.println("LED was turned OFF");
-  isLEDOn = false;
-  LED_digital_write(0, 0);
-  // spiSend(0b11110000);
 }
 
 void handleRoot()
@@ -390,7 +371,6 @@ void handleEndpoint()
 void setup()
 {
   Serial.begin(115200);
-  isLEDOn = false;
   WiFi.softAP("ESP8266 LED Dimmer", "YOLOisTOOshort");
   server.onNotFound(handleEndpoint);
   server.on("/", handleRoot);
@@ -398,7 +378,6 @@ void setup()
   server.on("/saveConfig", handleSaveConfig);
   server.begin();
   Serial.println("Server is up and running");
-  pinMode(LED_PIN, OUTPUT);
   Serial.println("Printing SPI interface pins: ");
   Serial.print("MISO: ");
   Serial.println(MISO);
@@ -419,10 +398,6 @@ void setup()
 void loop()
 {
   server.handleClient();
-  if(isLEDOn)
-    digitalWrite(LED_PIN, HIGH);
-  else
-    digitalWrite(LED_PIN, LOW);
 }
 
 void testSequence()
